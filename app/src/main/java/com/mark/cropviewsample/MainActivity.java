@@ -16,6 +16,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void init() {
         cropView = findViewById(R.id.crop_view);
-        cropView.setImageResource(R.drawable.crop);
+        cropView.setImageResource(R.drawable.crop_920x360);
     }
 }
