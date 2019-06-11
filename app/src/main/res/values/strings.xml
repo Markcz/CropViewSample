@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">CropViewSample</string>
+    <string name="crop">裁剪</string>
 </resources>

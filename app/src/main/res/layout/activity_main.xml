@@ -1,14 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@android:color/holo_purple"
+    android:orientation="vertical"
     >
+    
+    <FrameLayout
+        android:background="@color/colorAccent"
+        android:layout_width="match_parent"
+        android:layout_height="60dp">
+        
+        <TextView
+            android:id="@+id/tv_crop"
+            android:textSize="15sp"
+            android:padding="5dp"
+            android:textColor="@android:color/white"
+            android:text="@string/crop"
+            android:layout_gravity="end|center_vertical"
+            android:layout_marginEnd="15dp"
+            android:layout_marginTop="15dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+        
+    </FrameLayout>
 
     <com.mark.cropview.CropView
         android:id="@+id/crop_view"
-        android:background="@android:color/holo_orange_dark"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-</FrameLayout>
+</LinearLayout>

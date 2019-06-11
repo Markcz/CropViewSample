@@ -17,7 +17,15 @@ import android.support.v7.widget.AppCompatImageView;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.TypedValue;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+
+import static android.support.v4.graphics.TypefaceCompatUtil.closeQuietly;
 
 public class CropView extends AppCompatImageView {
 
@@ -27,6 +35,17 @@ public class CropView extends AppCompatImageView {
     final static int DEFAULT_OVERLAY_COLOR = Color.parseColor("#99000000");//默认裁剪框颜色
     //final static int DEFAULT_OVERLAY_COLOR = Color.WHITE;//默认裁剪框颜色
 
+
+    static final float DEFAULT_MAX_SCALE = 8.0f;
+    static final float DEFAULT_MID_SCALE = 4.0f;
+    static final float DEFAULT_MIN_SCALE = 1.0f;
+
+
+    float minScale = DEFAULT_MIN_SCALE;
+    float middleScale = DEFAULT_MID_SCALE;
+    float maxScale = DEFAULT_MAX_SCALE;
+
+
     int viewPortBorderColor = DEFAULT_VIEW_PORT_BORDER_COLOR;//裁剪框颜色
     int viewPortBorderWidth = dp2px(1);//裁剪框宽度
 
@@ -34,6 +53,9 @@ public class CropView extends AppCompatImageView {
 
     float viewPortLeftAndRightMargin = dp2px(25);
     float viewPortTopAndBottomMargin = dp2px(10);
+
+
+    float[] matrixValues = new float[9];
 
 
     float cropRadio = 16f / 9f;//默认裁剪高宽比例: H : W = 1：1
@@ -47,8 +69,48 @@ public class CropView extends AppCompatImageView {
     Paint viewportBorderPaint = new Paint();
     Paint overlayPaint = new Paint();
 
-
     Matrix matrix = new Matrix();
+
+
+    GestureDetector simpleDetector;
+    ScaleGestureDetector scaleDetector;
+
+    GestureDetector.SimpleOnGestureListener simpleListener = new GestureDetector.SimpleOnGestureListener() {
+        @Override
+        public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+            if (e1.getPointerCount() > 1 || e2.getPointerCount() > 1) {
+                return false;
+            } else {
+                matrix.postTranslate(-distanceX, -distanceY);
+                postInvalidate();
+                return true;
+            }
+        }
+    };
+
+    ScaleGestureDetector.SimpleOnScaleGestureListener scaleListener = new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+        @Override
+        public boolean onScale(ScaleGestureDetector detector) {
+            float scaleFactor = detector.getScaleFactor();
+            float focusX = detector.getFocusX();
+            float focusY = detector.getFocusY();
+            imageScale(scaleFactor, focusX, focusY);
+            return true;
+        }
+    };
+
+    void imageScale(float scaleFactor, float px, float py) {
+        float scale = getScale();
+        if (scale >= middleScale) {
+            postInvalidate();
+        } else {
+            postInvalidate();
+        }
+        if ((scale < maxScale || scaleFactor < 1f) && (scale > minScale || scaleFactor > 1f)) {
+            matrix.postScale(scaleFactor, scaleFactor, px, py);
+            postInvalidate();
+        }
+    }
 
 
     public CropView(Context context) {
@@ -73,19 +135,32 @@ public class CropView extends AppCompatImageView {
         overlayPaint.setAntiAlias(true);
         overlayPaint.setColor(overlayColor);
         overlayPaint.setStyle(Paint.Style.FILL);
+
+        simpleDetector = new GestureDetector(getContext(), simpleListener);
+        scaleDetector = new ScaleGestureDetector(getContext(), scaleListener);
+
+
     }
 
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        boolean handle = false;
+        if (null != scaleDetector) {
+            //缩放
+            handle = scaleDetector.onTouchEvent(event);
+        }
+        if (null != simpleDetector && simpleDetector.onTouchEvent(event) && event.getPointerCount() == 1) {
+            //拖拽
+            handle = true;
+        }
+        return handle;
 
-        return super.onTouchEvent(event);
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-
         if (init) {
             //首次
             canvas.save();
@@ -100,14 +175,24 @@ public class CropView extends AppCompatImageView {
             init = false;
         } else {
             //执行变幻时
-            // TODO: 2019/6/2 变换时 绘制图片
+
             drawTransformBitmap(canvas);
+
+            canvas.save();
+            int halfWidth = getWidth() / 2;
+            int halfHeight = getHeight() / 2;
+            canvas.translate(halfWidth, halfHeight);
+            setViewport(halfWidth, halfHeight);
+            drawViewPort(canvas);
+            drawOverlay(canvas);
+            canvas.restore();
         }
 
     }
 
     /**
      * 设置 viewport
+     *
      * @param halfWidth
      * @param halfHeight
      */
@@ -129,10 +214,10 @@ public class CropView extends AppCompatImageView {
      * @param canvas
      */
     private void drawTransformBitmap(Canvas canvas) {
-        if (bitmap == null){
+        if (bitmap == null) {
             return;
         }
-        canvas.drawBitmap(bitmap,matrix,null);
+        canvas.drawBitmap(bitmap, matrix, null);
     }
 
     /**
@@ -251,6 +336,7 @@ public class CropView extends AppCompatImageView {
         setImageBitmap(bitmap);
     }
 
+
     public float getCropRadio() {
         return cropRadio;
     }
@@ -263,6 +349,62 @@ public class CropView extends AppCompatImageView {
     @Nullable
     private Bitmap getImageBitmap() {
         return bitmap;
+    }
+
+
+    private float getScale() {
+        return (float) Math.sqrt((float) Math.pow(getValue(matrix, Matrix.MSCALE_X), 2) + (float) Math.pow(getValue(matrix, Matrix.MSKEW_Y), 2));
+    }
+
+    private float getValue(Matrix m, int whichValue) {
+        m.getValues(matrixValues);
+        return matrixValues[whichValue];
+    }
+
+
+    public Bitmap crop() {
+        if (bitmap == null) {
+            return null;
+        }
+        final Bitmap src = bitmap;
+        final Bitmap.Config srcConfig = src.getConfig();
+        final Bitmap.Config config = srcConfig == null ? Bitmap.Config.ARGB_8888 : srcConfig;
+        final int viewportWidth = (int) viewportRectF.width();
+        final int viewportHeight = (int) viewportRectF.height();
+        final Bitmap dst = Bitmap.createBitmap(viewportWidth, viewportHeight, config);
+        Canvas canvas = new Canvas(dst);
+        final int left = (getWidth() - viewportWidth) / 2;
+        final int top = (getHeight() - viewportHeight) / 2;
+        canvas.translate(-left, -top);
+        drawTransformBitmap(canvas);
+        return dst;
+    }
+
+
+    public void flushToFile(Bitmap bitmap, File dstFile, int quality, Bitmap.CompressFormat format) {
+        OutputStream outputStream = null;
+        try {
+            dstFile.getParentFile().mkdirs();
+            outputStream = new FileOutputStream(dstFile);
+            bitmap.compress(format, quality, outputStream);
+            outputStream.flush();
+        } catch (final Throwable throwable) {
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "Error attempting to save bitmap.", throwable);
+            }
+        } finally {
+            closeQuietly(outputStream);
+        }
+    }
+
+    private static void closeQuietly(@Nullable OutputStream outputStream) {
+        try {
+            if (outputStream != null) {
+                outputStream.close();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error attempting to close stream.", e);
+        }
     }
 
 
