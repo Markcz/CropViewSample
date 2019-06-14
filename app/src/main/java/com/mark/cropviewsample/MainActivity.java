@@ -36,7 +36,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         tvCrop = findViewById(R.id.tv_crop);
         cropView = findViewById(R.id.crop_view);
 
-        cropView.setImageResource(R.drawable.crop_720x1280);
+        cropView.setImageResource(R.drawable.crop_2048x1242);
         tvCrop.setOnClickListener(this);
 
     }

@@ -128,11 +128,15 @@ public class CropView extends AppCompatImageView {
 
     void init() {
         viewportBorderPaint.setAntiAlias(true);
+        viewportBorderPaint.setDither(true);
+        viewportBorderPaint.setFilterBitmap(true);
         viewportBorderPaint.setColor(viewPortBorderColor);
         viewportBorderPaint.setStrokeWidth(viewPortBorderWidth);
         viewportBorderPaint.setStyle(Paint.Style.STROKE);
 
         overlayPaint.setAntiAlias(true);
+        overlayPaint.setDither(true);
+        overlayPaint.setFilterBitmap(true);
         overlayPaint.setColor(overlayColor);
         overlayPaint.setStyle(Paint.Style.FILL);
 
@@ -175,9 +179,7 @@ public class CropView extends AppCompatImageView {
             init = false;
         } else {
             //执行变幻时
-
             drawTransformBitmap(canvas);
-
             canvas.save();
             int halfWidth = getWidth() / 2;
             int halfHeight = getHeight() / 2;
@@ -366,18 +368,34 @@ public class CropView extends AppCompatImageView {
         if (bitmap == null) {
             return null;
         }
-        final Bitmap src = bitmap;
-        final Bitmap.Config srcConfig = src.getConfig();
+        final Bitmap.Config srcConfig = bitmap.getConfig();
         final Bitmap.Config config = srcConfig == null ? Bitmap.Config.ARGB_8888 : srcConfig;
         final int viewportWidth = (int) viewportRectF.width();
         final int viewportHeight = (int) viewportRectF.height();
-        final Bitmap dst = Bitmap.createBitmap(viewportWidth, viewportHeight, config);
-        Canvas canvas = new Canvas(dst);
-        final int left = (getWidth() - viewportWidth) / 2;
-        final int top = (getHeight() - viewportHeight) / 2;
-        canvas.translate(-left, -top);
-        drawTransformBitmap(canvas);
+        Bitmap dst;
+        //没有执行变换操作
+        if (matrix.isIdentity()) {
+            Log.e(TAG,"isIdentity true");
+            int bw = bitmap.getWidth();
+            int bh = bitmap.getHeight();
+            if (bw >= bh){
+                dst = Bitmap.createScaledBitmap(bitmap, viewportHeight, viewportWidth, false);
+            }else {
+                dst = Bitmap.createScaledBitmap(bitmap, viewportWidth, viewportHeight, false);
+            }
+            return dst;
+        } else {
+            Log.e(TAG,"isIdentity false");
+            dst = Bitmap.createBitmap(viewportWidth, viewportHeight, config);
+            Canvas canvas = new Canvas(dst);
+            //执行了变换操作
+            final int left = (getWidth() - viewportWidth) / 2;
+            final int top = (getHeight() - viewportHeight) / 2;
+            canvas.translate(-left, -top);
+            drawTransformBitmap(canvas);
+        }
         return dst;
+
     }
 
 
@@ -393,6 +411,9 @@ public class CropView extends AppCompatImageView {
                 Log.e(TAG, "Error attempting to save bitmap.", throwable);
             }
         } finally {
+            if (bitmap != null && !bitmap.isRecycled()){
+                bitmap.recycle();
+            }
             closeQuietly(outputStream);
         }
     }
