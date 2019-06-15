@@ -64,7 +64,6 @@ public class CropView extends AppCompatImageView {
     boolean init = true;
 
     Bitmap bitmap;
-
     RectF viewportRectF = new RectF();
     Paint viewportBorderPaint = new Paint();
     Paint overlayPaint = new Paint();
@@ -111,7 +110,6 @@ public class CropView extends AppCompatImageView {
             postInvalidate();
         }
     }
-
 
     public CropView(Context context) {
         this(context, null);
@@ -165,11 +163,11 @@ public class CropView extends AppCompatImageView {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        int halfWidth = getWidth() / 2;
+        int halfHeight = getHeight() / 2;
         if (init) {
             //首次
             canvas.save();
-            int halfWidth = getWidth() / 2;
-            int halfHeight = getHeight() / 2;
             canvas.translate(halfWidth, halfHeight);
             setViewport(halfWidth, halfHeight);
             drawBitmap(canvas);
@@ -181,15 +179,12 @@ public class CropView extends AppCompatImageView {
             //执行变幻时
             drawTransformBitmap(canvas);
             canvas.save();
-            int halfWidth = getWidth() / 2;
-            int halfHeight = getHeight() / 2;
             canvas.translate(halfWidth, halfHeight);
             setViewport(halfWidth, halfHeight);
             drawViewPort(canvas);
             drawOverlay(canvas);
             canvas.restore();
         }
-
     }
 
     /**
@@ -208,18 +203,6 @@ public class CropView extends AppCompatImageView {
             right = distanceV / cropRadio;
         }
         viewportRectF.set(-right, -bottom, right, bottom);
-    }
-
-    /**
-     * 变幻时 绘制bitmap
-     *
-     * @param canvas
-     */
-    private void drawTransformBitmap(Canvas canvas) {
-        if (bitmap == null) {
-            return;
-        }
-        canvas.drawBitmap(bitmap, matrix, null);
     }
 
     /**
@@ -245,6 +228,22 @@ public class CropView extends AppCompatImageView {
             float top = viewportRectF.top;
             canvas.drawBitmap(bitmap, left, top, null);
         }
+    }
+
+    /**
+     * 变幻时 绘制bitmap
+     *
+     * @param canvas
+     */
+    private void drawTransformBitmap(Canvas canvas) {
+        if (bitmap == null) {
+            return;
+        }
+        float tx = getValue(matrix, Matrix.MTRANS_X);
+        float ty = getValue(matrix, Matrix.MTRANS_Y);
+        Log.e(TAG, String.format("tx = %f, ty = %f", tx, ty));
+
+        canvas.drawBitmap(bitmap, matrix, null);
     }
 
     /**
@@ -318,6 +317,23 @@ public class CropView extends AppCompatImageView {
         return null;
     }
 
+    public Bitmap crop() {
+        if (bitmap == null) {
+            return null;
+        }
+        final Bitmap.Config srcConfig = bitmap.getConfig();
+        final Bitmap.Config config = srcConfig == null ? Bitmap.Config.ARGB_8888 : srcConfig;
+        final int viewportWidth = (int) viewportRectF.width();
+        final int viewportHeight = (int) viewportRectF.height();
+        Bitmap dst = Bitmap.createBitmap(viewportWidth, viewportHeight, config);
+        Canvas canvas = new Canvas(dst);
+        final int left = (getWidth() - viewportWidth) / 2;
+        final int top = (getHeight() - viewportHeight) / 2;
+        canvas.translate(-left, -top);
+        drawTransformBitmap(canvas);
+        return dst;
+    }
+
     @Override
     public void setImageResource(@DrawableRes int resId) {
         final Bitmap bitmap = BitmapFactory.decodeResource(getResources(), resId);
@@ -363,42 +379,6 @@ public class CropView extends AppCompatImageView {
         return matrixValues[whichValue];
     }
 
-
-    public Bitmap crop() {
-        if (bitmap == null) {
-            return null;
-        }
-        final Bitmap.Config srcConfig = bitmap.getConfig();
-        final Bitmap.Config config = srcConfig == null ? Bitmap.Config.ARGB_8888 : srcConfig;
-        final int viewportWidth = (int) viewportRectF.width();
-        final int viewportHeight = (int) viewportRectF.height();
-        Bitmap dst;
-        //没有执行变换操作
-        if (matrix.isIdentity()) {
-            Log.e(TAG,"isIdentity true");
-            int bw = bitmap.getWidth();
-            int bh = bitmap.getHeight();
-            if (bw >= bh){
-                dst = Bitmap.createScaledBitmap(bitmap, viewportHeight, viewportWidth, false);
-            }else {
-                dst = Bitmap.createScaledBitmap(bitmap, viewportWidth, viewportHeight, false);
-            }
-            return dst;
-        } else {
-            Log.e(TAG,"isIdentity false");
-            dst = Bitmap.createBitmap(viewportWidth, viewportHeight, config);
-            Canvas canvas = new Canvas(dst);
-            //执行了变换操作
-            final int left = (getWidth() - viewportWidth) / 2;
-            final int top = (getHeight() - viewportHeight) / 2;
-            canvas.translate(-left, -top);
-            drawTransformBitmap(canvas);
-        }
-        return dst;
-
-    }
-
-
     public void flushToFile(Bitmap bitmap, File dstFile, int quality, Bitmap.CompressFormat format) {
         OutputStream outputStream = null;
         try {
@@ -411,7 +391,7 @@ public class CropView extends AppCompatImageView {
                 Log.e(TAG, "Error attempting to save bitmap.", throwable);
             }
         } finally {
-            if (bitmap != null && !bitmap.isRecycled()){
+            if (bitmap != null && !bitmap.isRecycled()) {
                 bitmap.recycle();
             }
             closeQuietly(outputStream);

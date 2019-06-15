@@ -1,7 +1,9 @@
 package com.mark.cropviewsample;
 
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.os.AsyncTask;
 import android.os.Environment;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
@@ -9,14 +11,8 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import com.mark.cropview.CropView;
-
 import java.io.File;
-import java.io.OutputStream;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
@@ -52,46 +48,42 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void crop() {
         if (PermissionHelper.checkStoragePermission(this)) {
-            flushToFile(cropView.crop(),
-                    Bitmap.CompressFormat.JPEG,
-                    100,
-                    new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).getAbsolutePath()
-                            , "crop_"+System.currentTimeMillis() + ".jpg"));
-        }else {
-            PermissionHelper.requestStoragePermission(this,REQUEST_PERMISSION_CODE);
+            new CropAsyncTask().execute(cropView.crop());
+        } else {
+            PermissionHelper.requestStoragePermission(this, REQUEST_PERMISSION_CODE);
         }
     }
-
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         if (requestCode == REQUEST_PERMISSION_CODE
                 && grantResults.length > 1
-                && grantResults[0] == PackageManager.PERMISSION_GRANTED){
-            flushToFile(cropView.crop(),
-                    Bitmap.CompressFormat.JPEG,
-                    100,
-                    new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).getAbsolutePath()
-                            , System.currentTimeMillis() + ".jpg"));
-        }else {
-            Toast.makeText(this,"缺少存储权限",Toast.LENGTH_LONG);
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            new CropAsyncTask().execute(cropView.crop());
+        } else {
+            Toast.makeText(this, "缺少存储权限", Toast.LENGTH_LONG);
         }
     }
 
 
+    class CropAsyncTask extends AsyncTask<Bitmap, Void, File> {
 
-    private final static ExecutorService EXECUTOR_SERVICE = Executors.newCachedThreadPool();
+        @Override
+        protected File doInBackground(Bitmap... bitmaps) {
+            File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).getAbsolutePath()
+                    , System.currentTimeMillis() + ".jpg");
+            cropView.flushToFile(bitmaps[0], file, 100, Bitmap.CompressFormat.JPEG);
+            return file;
+        }
 
-    public Future<Void> flushToFile(final Bitmap bitmap,
-                                    final Bitmap.CompressFormat format,
-                                    final int quality,
-                                    final File file) {
-
-        return EXECUTOR_SERVICE.submit(new Runnable() {
-            @Override
-            public void run() {
-                cropView.flushToFile(bitmap, file, quality, format);
+        @Override
+        protected void onPostExecute(File file) {
+            super.onPostExecute(file);
+            if (!isFinishing() && file != null && file.exists()){
+                Intent intent = new Intent(MainActivity.this,PreviewActivity.class);
+                intent.putExtra("preview",file.getAbsolutePath());
+                startActivity(intent);
             }
-        }, null);
+        }
     }
 }
