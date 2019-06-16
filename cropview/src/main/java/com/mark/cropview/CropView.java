@@ -239,11 +239,52 @@ public class CropView extends AppCompatImageView {
         if (bitmap == null) {
             return;
         }
+
+        int bw = bitmap.getWidth();
+        int bh = bitmap.getHeight();
+
         float tx = getValue(matrix, Matrix.MTRANS_X);
         float ty = getValue(matrix, Matrix.MTRANS_Y);
-        Log.e(TAG, String.format("tx = %f, ty = %f", tx, ty));
 
+        float sx = bw * getValue(matrix, Matrix.MSCALE_X);
+        float sy = bh * getValue(matrix, Matrix.MSCALE_Y);
+
+        Log.e(TAG, String.format("tx = %f, ty = %f", tx, ty));
+        Log.e(TAG, String.format("sx = %f, sy = %f", sx, sy));
+
+        float halfWidth = getWidth() / 2;
+        float halfHeight = getHeight() / 2;
+
+        float left = viewportRectF.left + halfWidth;
+        float top = viewportRectF.top + halfHeight;
+        float right = -tx + left + viewportRectF.width();
+        float bottom = -ty - viewportRectF.top + viewportRectF.height();
+        if (tx >= left) {
+            float distanceX = tx - left;
+            matrix.postTranslate(-distanceX, 0);
+        }
+        if (ty >= top) {
+            float distanceY = ty - top;
+            matrix.postTranslate(0, -distanceY);
+        }
+        if (right >= sx) {
+            float distanceX = tx - left;
+            matrix.postTranslate(-distanceX, 0);
+        }
+        if (bottom >= sy){
+            float distanceY = ty - top;
+            matrix.postTranslate(0, -distanceY);
+        }
+
+
+        Log.e(TAG, String.format("left = %f, top = %f, right = %f, bottom = %f",
+                viewportRectF.left + halfWidth, viewportRectF.top + halfHeight, halfWidth - viewportRectF.right, halfHeight - viewportRectF.bottom));
+        checkBound();
         canvas.drawBitmap(bitmap, matrix, null);
+    }
+
+    private void checkBound() {
+
     }
 
     /**
